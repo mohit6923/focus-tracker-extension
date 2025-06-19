@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chart.js Test</title>
+</head>
+<body>
+    <h1>Chart.js Test</h1>
+    <canvas id="testChart" width="400" height="200"></canvas>
+    
+    <script src="chart.min.js"></script>
+    <script>
+        console.log("Chart.js loaded:", typeof Chart);
+        
+        if (typeof Chart !== 'undefined') {
+            const ctx = document.getElementById('testChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Red', 'Blue', 'Yellow'],
+                    datasets: [{
+                        data: [300, 50, 100],
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56']
+                    }]
+                }
+            });
+            console.log("Chart created successfully");
+        } else {
+            console.error("Chart.js not loaded");
+            document.body.innerHTML += "<p style='color: red;'>Chart.js failed to load</p>";
+        }
+    </script>
+</body>
+</html> 
