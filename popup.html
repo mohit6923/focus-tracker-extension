@@ -1,1 +1,25 @@
-<!DOCTYPE html><html><head><title>Focus Tracker</title><link rel="stylesheet" type="text/css" href="popup.css"></head><body><button id="toggleButton">Start Focus</button><hr><a href="analytics.html" target="_blank">View Analytics</a><script src="popup.js"></script></body></html>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Focus Tracker</title>
+    <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Focus Tracker</h2>
+        
+        <div class="status-section">
+            <div id="statusText">No active session</div>
+            <div id="sessionTimer" class="timer"></div>
+        </div>
+        
+        <button id="startButton">Start Focus</button>
+        
+        <div class="analytics-section">
+            <a href="#" id="analyticsLink">View Analytics</a>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
