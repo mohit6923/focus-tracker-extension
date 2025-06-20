@@ -38,4 +38,4 @@ We may update this privacy policy from time to time. We will notify you of any c
 
 ## Contact Us
 
-If you have any questions about this privacy policy, please contact us at [Your Email or Contact Page Link Here]. 
+If you have any questions about this privacy policy, please contact us at [moradiya.mohit@gmail.com]. 
