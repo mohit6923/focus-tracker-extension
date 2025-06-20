@@ -78,6 +78,8 @@ h2 {
 }
 
 .main-controls {
+    display: flex;
+    gap: 10px;
     margin-bottom: 10px;
 }
 
@@ -151,4 +153,174 @@ h2 {
 .stat-label {
     font-size: 0.8em;
     color: #a7a7a7;
+}
+
+/* Goal-controls styling */
+#goal-controls h3 {
+    font-size: 1.2em;
+    font-weight: 500;
+    color: #ffffff;
+    margin-bottom: 15px;
+}
+
+#goal-list-container {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.goal-item {
+    display: flex;
+    align-items: center;
+    background-color: #2a2a4a;
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.goal-item input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+.goal-item label {
+    flex-grow: 1;
+    color: #e0e0e0;
+}
+
+.goal-target-time {
+    background: linear-gradient(135deg, #21d19f, #00a8cc);
+    color: #ffffff;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    font-weight: 600;
+    margin-left: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* --- New Goal Input Design --- */
+.goal-input-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+    align-items: stretch;
+}
+
+.input-wrapper {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    background: #2a2a4a;
+    border: 1px solid #3f3f6c;
+    border-radius: 8px;
+    padding-left: 12px;
+    transition: all 0.2s ease-in-out;
+}
+
+.input-wrapper:focus-within {
+    border-color: #00a8cc;
+    box-shadow: 0 0 0 3px rgba(0, 168, 204, 0.15);
+}
+
+#new-goal-input {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    color: #e0e0e0;
+    font-size: 0.95em;
+    padding: 10px 0;
+}
+
+#new-goal-input:focus, 
+#target-time-input:focus {
+    outline: none;
+}
+
+.time-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    border-left: 1px solid #3f3f6c;
+    margin-left: 8px;
+}
+
+#target-time-input {
+    background: transparent;
+    border: none;
+    color: #a7a7a7;
+    text-align: center;
+    width: 35px;
+    font-size: 0.95em;
+    padding: 10px 0;
+}
+
+#target-time-input::placeholder {
+    color: #6a6a8f;
+}
+
+/* Remove arrows from number input */
+#target-time-input::-webkit-outer-spin-button,
+#target-time-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#target-time-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.time-icon {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 1.5px solid #6a6a8f;
+    border-radius: 50%;
+    position: relative;
+    transition: border-color 0.2s;
+}
+
+.input-wrapper:focus-within .time-icon {
+    border-color: #00a8cc;
+}
+
+.time-icon::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 5.75px;
+    width: 1.5px;
+    height: 4px;
+    background-color: #6a6a8f;
+    transform-origin: 50% 100%;
+}
+
+.time-icon::after {
+    content: '';
+    position: absolute;
+    top: 5.75px;
+    left: 4px;
+    width: 4px;
+    height: 1.5px;
+    background-color: #6a6a8f;
+    transform-origin: 0% 50%;
+}
+
+.input-wrapper:focus-within .time-icon::before,
+.input-wrapper:focus-within .time-icon::after {
+    background-color: #00a8cc;
+}
+
+#add-goal-btn {
+    flex-shrink: 0;
+    width: 42px;
+    padding: 0;
+    font-size: 1.6em;
+    line-height: 42px;
+}
+
+.goal-selection-container {
+    margin-bottom: 20px;
+    max-height: 180px;
 }

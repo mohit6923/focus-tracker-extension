@@ -7,10 +7,22 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log("Popup loaded at:", new Date().toISOString());
     
     // Set up event listeners
-    document.getElementById('toggleFocus').addEventListener('click', toggleFocus);
+    document.getElementById('quickStart').addEventListener('click', () => startFocusSession());
+    document.getElementById('goalStart').addEventListener('click', showGoalScreen);
+    document.getElementById('stopFocus').addEventListener('click', stopFocusSession);
     document.getElementById('pauseResume').addEventListener('click', togglePause);
     document.getElementById('viewAnalytics').addEventListener('click', openAnalytics);
-    
+
+    // Goal screen event listeners
+    document.getElementById('back-to-main').addEventListener('click', showMainScreen);
+    document.getElementById('add-goal-btn').addEventListener('click', addNewGoal);
+    document.getElementById('new-goal-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            addNewGoal();
+        }
+    });
+    document.getElementById('start-goal-session').addEventListener('click', startGoalBasedSession);
+
     // Initial state check
     checkSessionStatus();
     
@@ -87,28 +99,6 @@ function updateDailyStats() {
     });
 }
 
-function toggleFocus() {
-    console.log("Toggle focus clicked. Current state:", isFocusModeOn);
-    
-    // Disable the button temporarily to prevent double-clicks
-    const button = document.getElementById('toggleFocus');
-    button.disabled = true;
-    
-    if (isFocusModeOn) {
-        console.log("User initiated stop");
-        userInitiatedStop = true;
-        stopFocusSession().finally(() => {
-            button.disabled = false;
-        });
-    } else {
-        console.log("User initiated start");
-        userInitiatedStop = false;
-        startFocusSession().finally(() => {
-            button.disabled = false;
-        });
-    }
-}
-
 function togglePause() {
     isPaused = !isPaused;
     chrome.storage.local.set({ isPaused: isPaused });
@@ -116,10 +106,126 @@ function togglePause() {
     updateUI();
 }
 
-function startFocusSession() {
-    console.log("Starting focus session...");
+function showGoalScreen() {
+    document.getElementById('start-controls').style.display = 'none';
+    document.getElementById('goal-controls').style.display = 'block';
+    loadGoals();
+}
+
+function showMainScreen() {
+    document.getElementById('goal-controls').style.display = 'none';
+    document.getElementById('start-controls').style.display = 'block';
+}
+
+function loadGoals() {
+    chrome.storage.local.get('focusGoals', function(data) {
+        const goals = data.focusGoals || [];
+        const goalListContainer = document.getElementById('goal-list-container');
+        goalListContainer.innerHTML = '';
+        goals.forEach(goal => {
+            const goalEl = createGoalElement(goal.text, goal.id, goal.targetTime);
+            goalListContainer.appendChild(goalEl);
+        });
+        updateGoalSessionButton();
+    });
+}
+
+function addNewGoal() {
+    const input = document.getElementById('new-goal-input');
+    const targetTimeInput = document.getElementById('target-time-input');
+    const goalText = input.value.trim();
+    const targetTime = targetTimeInput.value ? parseInt(targetTimeInput.value) : null;
+    
+    if (goalText) {
+        chrome.storage.local.get('focusGoals', function(data) {
+            const goals = data.focusGoals || [];
+            const newGoal = { 
+                id: Date.now(), 
+                text: goalText,
+                targetTime: targetTime
+            };
+            goals.push(newGoal);
+            chrome.storage.local.set({ focusGoals: goals }, function() {
+                const goalEl = createGoalElement(newGoal.text, newGoal.id, newGoal.targetTime);
+                document.getElementById('goal-list-container').appendChild(goalEl);
+                input.value = '';
+                targetTimeInput.value = '';
+                updateGoalSessionButton();
+            });
+        });
+    }
+}
+
+function createGoalElement(text, id, targetTime = null) {
+    const li = document.createElement('div');
+    li.className = 'goal-item';
+    
+    const targetTimeDisplay = targetTime ? `<span class="goal-target-time">${targetTime}m</span>` : '';
+    
+    li.innerHTML = `
+        <input type="checkbox" id="goal-${id}" data-goal-text="${text}" data-target-time="${targetTime || ''}">
+        <label for="goal-${id}">${text}</label>
+        ${targetTimeDisplay}
+    `;
+    
+    // Add event listener to the checkbox
+    const checkbox = li.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', updateGoalSessionButton);
+    
+    return li;
+}
+
+function updateGoalSessionButton() {
+    const selectedGoals = document.querySelectorAll('#goal-list-container input[type="checkbox"]:checked');
+    const startButton = document.getElementById('start-goal-session');
+    
+    if (selectedGoals.length > 0) {
+        startButton.disabled = false;
+        startButton.textContent = `Start Focused Session (${selectedGoals.length} goal${selectedGoals.length > 1 ? 's' : ''})`;
+    } else {
+        startButton.disabled = true;
+        startButton.textContent = 'Select at least one goal';
+    }
+}
+
+function startGoalBasedSession() {
+    const selectedGoals = [];
+    document.querySelectorAll('#goal-list-container input[type="checkbox"]:checked').forEach(checkbox => {
+        const goalData = {
+            text: checkbox.dataset.goalText,
+            targetTime: checkbox.dataset.targetTime ? parseInt(checkbox.dataset.targetTime) : null
+        };
+        selectedGoals.push(goalData);
+    });
+
+    if (selectedGoals.length === 0) {
+        // Maybe show a small warning? For now, just start a regular session.
+        startFocusSession();
+        return;
+    }
+
+    console.log("Starting goal-based session with goals:", selectedGoals);
+    startFocusSession(selectedGoals);
+}
+
+function startFocusSession(goals = []) {
+    console.log("Starting focus session with goals:", goals);
+    console.log("Goals parameter type:", typeof goals);
+    console.log("Goals parameter length:", goals ? goals.length : 'undefined');
+    
+    document.getElementById('quickStart').disabled = true;
+    document.getElementById('goalStart').disabled = true;
+    
+    const message = {
+        toggleFocus: true,
+        isFocusModeOn: true,
+        goals: goals
+    };
+
+    console.log("Sending message to background:", message);
+
     return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({toggleFocus: true, isFocusModeOn: true}, function(response) {
+        chrome.runtime.sendMessage(message, function(response) {
             console.log("Start response:", response);
             if (response && response.success) {
                 isFocusModeOn = true;
@@ -135,11 +241,15 @@ function startFocusSession() {
                 reject(new Error("Failed to start session"));
             }
         });
+    }).finally(() => {
+        document.getElementById('quickStart').disabled = false;
+        document.getElementById('goalStart').disabled = false;
     });
 }
 
 function stopFocusSession() {
     console.log("Stopping focus session...");
+    document.getElementById('stopFocus').disabled = true;
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({toggleFocus: true, isFocusModeOn: false}, function(response) {
             console.log("Stop response:", response);
@@ -156,32 +266,35 @@ function stopFocusSession() {
                 reject(new Error("Failed to stop session"));
             }
         });
+    }).finally(() => {
+        document.getElementById('stopFocus').disabled = false;
     });
 }
 
 function updateUI() {
-    const toggleButton = document.getElementById('toggleFocus');
+    const startControls = document.getElementById('start-controls');
+    const sessionControls = document.getElementById('session-controls');
+    const goalControls = document.getElementById('goal-controls');
     const pauseButton = document.getElementById('pauseResume');
     const statusContainer = document.getElementById('status');
     const statusText = statusContainer.querySelector('.status-text');
     
     if (isFocusModeOn) {
-        toggleButton.textContent = 'Stop Focus';
-        toggleButton.className = 'btn btn-primary danger';
+        startControls.style.display = 'none';
+        goalControls.style.display = 'none';
+        sessionControls.style.display = 'block';
 
         statusContainer.className = 'status-badge on';
         statusText.textContent = isPaused ? 'PAUSED' : 'ON';
         
         pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
-        pauseButton.style.display = 'block';
     } else {
-        toggleButton.textContent = 'Start Focus';
-        toggleButton.className = 'btn btn-primary';
+        startControls.style.display = 'block';
+        sessionControls.style.display = 'none';
+        goalControls.style.display = 'none';
         
         statusContainer.className = 'status-badge off';
         statusText.textContent = 'OFF';
-
-        pauseButton.style.display = 'none';
     }
 }
 

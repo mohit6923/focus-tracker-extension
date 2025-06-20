@@ -47,6 +47,7 @@ function displayAnalytics(sessionHistory) {
     
     displaySessionsList(sessionHistory);
     displayWebsiteBreakdown(sessionHistory);
+    displayGoalAnalytics(sessionHistory);
 }
 
 function displayWebsiteBreakdown(sessions) {
@@ -67,26 +68,65 @@ function displayWebsiteBreakdown(sessions) {
 
     const dates = Object.keys(websitesByDay).sort((a, b) => new Date(b) - new Date(a));
     if (dates.length === 0) {
-        container.innerHTML = "<div class='no-data'>No website data to display.</div>";
+        container.innerHTML = "<div class='no-website-data'>No website data to display.</div>";
         return;
     }
 
-    // Create horizontal day picker
-    const dayPicker = document.createElement('div');
-    dayPicker.className = 'day-picker';
-    dayPicker.innerHTML = dates.map(date => 
-        `<div class="day-chip" data-date="${date}">${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`
-    ).join('');
-    container.innerHTML = ''; // Clear previous content
-    container.appendChild(dayPicker);
+    // Calculate overall website stats
+    const allWebsites = {};
+    let totalTime = 0;
+    let uniqueWebsites = new Set();
+    
+    Object.values(websitesByDay).forEach(dayData => {
+        Object.entries(dayData).forEach(([website, time]) => {
+            allWebsites[website] = (allWebsites[website] || 0) + time;
+            totalTime += time;
+            uniqueWebsites.add(website);
+        });
+    });
 
-    const breakdownContent = document.createElement('div');
-    breakdownContent.className = 'website-breakdown';
-    container.appendChild(breakdownContent);
+    const topWebsite = Object.entries(allWebsites).sort(([,a], [,b]) => b - a)[0];
+    const avgTimePerSite = totalTime / uniqueWebsites.size;
 
-    dayPicker.querySelectorAll('.day-chip').forEach(chip => {
+    // Create modern website breakdown with header
+    container.innerHTML = `
+        <div class="website-breakdown">
+            <div class="website-header">
+                <div class="website-title">Website Analytics</div>
+                <div class="website-stats">
+                    <div class="website-stat">
+                        <div class="website-stat-number">${uniqueWebsites.size}</div>
+                        <div class="website-stat-label">Unique Sites</div>
+                    </div>
+                    <div class="website-stat">
+                        <div class="website-stat-number">${formatTime(totalTime, true)}</div>
+                        <div class="website-stat-label">Total Time</div>
+                    </div>
+                    <div class="website-stat">
+                        <div class="website-stat-number">${formatTime(avgTimePerSite, true)}</div>
+                        <div class="website-stat-label">Avg/Site</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="day-picker">
+                ${dates.map(date => 
+                    `<div class="day-chip" data-date="${date}">${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`
+                ).join('')}
+            </div>
+
+            <div class="website-breakdown-content">
+                <!-- Content will be populated by renderDay function -->
+            </div>
+        </div>
+    `;
+
+    const breakdownContent = container.querySelector('.website-breakdown-content');
+
+    // Add click listeners to day chips
+    container.querySelectorAll('.day-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-            dayPicker.querySelector('.active')?.classList.remove('active');
+            container.querySelector('.day-chip.active')?.classList.remove('active');
             chip.classList.add('active');
             renderDay(chip.getAttribute('data-date'));
         });
@@ -95,46 +135,98 @@ function displayWebsiteBreakdown(sessions) {
     function renderDay(date) {
         const dayData = websitesByDay[date];
         if (!dayData) {
-            breakdownContent.innerHTML = "<div class='no-data'>No website data for this day.</div>";
+            breakdownContent.innerHTML = "<div class='no-website-data'>No website data for this day.</div>";
             return;
         }
-        const categorized = categorizeWebsites(dayData);
         
-        const maxTimePerSite = Math.max(...Object.values(dayData), 0);
+        const categorized = categorizeWebsites(dayData);
+        const totalDayTime = Object.values(dayData).reduce((sum, time) => sum + time, 0);
+        const totalHours = Math.round(totalDayTime / 3600000 * 10) / 10; // Convert to hours
 
-        breakdownContent.innerHTML = Object.entries(categorized).map(([category, sites]) => {
-            const sortedSites = Object.entries(sites).sort(([, a], [, b]) => b - a);
-            return `
-                <div class="category-card">
-                    <div class="category-header">
-                        <h4 class="category-title">${category}</h4>
+        breakdownContent.innerHTML = `
+            ${Object.entries(categorized).map(([category, sites]) => {
+                const sortedSites = Object.entries(sites).sort(([, a], [, b]) => b - a);
+                const categoryIcon = getCategoryIcon(category);
+                const categoryTime = Object.values(sites).reduce((sum, time) => sum + time, 0);
+                
+                return `
+                    <div class="category-card">
+                        <div class="category-header">
+                            <div class="category-title">
+                                <div class="category-icon">${categoryIcon}</div>
+                                ${category}
+                            </div>
+                        </div>
+                        <ul class="website-list">
+                            ${sortedSites.map(([site, time]) => {
+                                const hours = Math.round(time / 3600000 * 10) / 10;
+                                return `
+                                    <li class="website-item">
+                                        <div class="website-item-content">
+                                            <div class="website-info">
+                                                <div class="website-name">${site}</div>
+                                                <div class="website-meta">
+                                                    <span class="website-time">${formatTime(time)} (${hours}h)</span>
+                                                </div>
+                                            </div>
+                                            <div class="progress-container">
+                                                <div class="progress-bar-container">
+                                                    <div class="progress-bar" style="width: ${Math.round((time / totalDayTime) * 100)}%"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ul>
                     </div>
-                    <ul class="website-list">
-                        ${sortedSites.map(([site, time]) => `
-                            <li class="website-item">
-                                <div class="website-info">
-                                    <span class="website-name">${site}</span>
-                                    <div class="progress-bar-container">
-                                        <div class="progress-bar" style="width: ${(time / maxTimePerSite) * 100}%"></div>
-                                    </div>
-                                </div>
-                                <span class="website-time">${formatTime(time)}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('')}
+        `;
+    }
+
+    function calculateFocusScore(dayData) {
+        // Calculate focus score based on time distribution
+        // Higher score = more time spent on fewer sites (more focused)
+        const totalTime = Object.values(dayData).reduce((sum, time) => sum + time, 0);
+        const numSites = Object.keys(dayData).length;
+        
+        if (totalTime === 0 || numSites === 0) return 0;
+        
+        // Calculate concentration (how much time is spent on top sites)
+        const sortedTimes = Object.values(dayData).sort((a, b) => b - a);
+        const top3Time = sortedTimes.slice(0, 3).reduce((sum, time) => sum + time, 0);
+        const concentration = (top3Time / totalTime) * 100;
+        
+        // Calculate efficiency (less sites = higher score)
+        const efficiency = Math.max(0, 100 - (numSites * 5)); // Penalty for too many sites
+        
+        // Combine concentration and efficiency
+        const focusScore = Math.round((concentration * 0.7) + (efficiency * 0.3));
+        
+        return Math.min(100, Math.max(0, focusScore));
     }
 
     // Initial render for the most recent day
     if (dates.length > 0) {
-        const firstChip = dayPicker.querySelector('.day-chip');
+        const firstChip = container.querySelector('.day-chip');
         if (firstChip) {
             firstChip.classList.add('active');
             renderDay(firstChip.getAttribute('data-date'));
         }
     }
+}
+
+function getCategoryIcon(category) {
+    const icons = {
+        'Social Media': 'SM',
+        'Video & Entertainment': 'VE',
+        'News & Information': 'NI',
+        'Developer Tools': 'DT',
+        'Shopping': 'SP',
+        'Other': 'OT'
+    };
+    return icons[category] || 'OT';
 }
 
 function categorizeWebsites(websiteData) {
@@ -299,8 +391,15 @@ function renderWebsiteChart(sessions) {
         datasets: [{
             label: 'Time Spent (minutes)',
             data: sortedWebsites.map(([, time]) => (time / 60000).toFixed(2)),
-            backgroundColor: ['#00a8cc', '#fa0a6d', '#7c3aed', '#ff7a00', '#21d19f', '#ffc107', '#f44336', '#673ab7'],
-            borderWidth: 0
+            backgroundColor: [
+                '#21d19f', '#00a8cc', '#fa0a6d', '#7c3aed', 
+                '#ff7a00', '#ffc107', '#f44336', '#673ab7',
+                '#4caf50', '#2196f3', '#ff9800', '#9c27b0'
+            ],
+            borderColor: '#2a2a4a',
+            borderWidth: 2,
+            hoverBorderWidth: 3,
+            hoverBorderColor: '#ffffff'
         }]
     };
 
@@ -314,67 +413,104 @@ function renderWebsiteChart(sessions) {
             plugins: {
                 legend: { 
                     position: 'right',
-                    labels: { color: '#e0e0e0', font: { size: 14 } } 
+                    labels: { 
+                        color: '#e0e0e0', 
+                        font: { size: 12 },
+                        padding: 15,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    } 
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(42, 42, 74, 0.95)',
+                    titleColor: '#e0e0e0',
+                    bodyColor: '#e0e0e0',
+                    borderColor: '#3f3f6c',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    displayColors: true
                 }
-            }
+            },
+            cutout: '60%'
         }
     });
 }
 
 function displaySessionsList(sessionHistory) {
-    const sessionsList = document.getElementById("sessionsList");
-    if (!sessionsList) return;
-    
-    if (sessionHistory.length === 0) {
-        sessionsList.innerHTML = "<div class='no-data'>No sessions found</div>";
+    const container = document.getElementById("sessionsList");
+    if (!container) return;
+
+    const sortedHistory = [...sessionHistory].sort((a, b) => b.startTime - a.startTime);
+
+    if (sortedHistory.length === 0) {
+        container.innerHTML = "<div class='no-data'>No session history to display.</div>";
         return;
     }
-    
-    const sortedSessions = sessionHistory
-        .filter(session => session.startTime)
-        .sort((a, b) => b.startTime - a.startTime);
-    
-    sessionsList.innerHTML = sortedSessions.map((session) => {
-        const startTime = new Date(session.startTime);
-        const endTime = session.endTime ? new Date(session.endTime) : null;
-        const duration = session.duration || 0;
+
+    container.innerHTML = sortedHistory.map(session => {
+        const { id, startTime, endTime, duration, websites, goals } = session;
+        const startDate = new Date(startTime).toLocaleString();
+        const endDate = endTime ? new Date(endTime).toLocaleString() : 'In Progress';
+        const websitesCount = websites ? Object.keys(websites).length : 0;
         
-        const websites = session.websites ? Object.keys(session.websites) : [];
-        const topWebsites = websites.slice(0, 3).join(", ");
+        // Ensure goals is always an array (for backward compatibility with old sessions)
+        const sessionGoals = Array.isArray(goals) ? goals : [];
         
+        // Determine session type
+        const isGoalBased = sessionGoals.length > 0;
+        
+        const sessionType = isGoalBased ? 'Goal-Based Session' : 'Quick Start Session';
+        const sessionTypeClass = isGoalBased ? 'session-type-goal' : 'session-type-quick';
+        
+        const goalsHtml = isGoalBased
+            ? `<div class="session-goals">
+                <div class="goals-header">
+                    <strong>Selected Goals (${sessionGoals.length}):</strong>
+                </div>
+                <div class="goals-list">
+                    ${sessionGoals.map(g => {
+                        const goalText = typeof g === 'string' ? g : g.text;
+                        const targetTime = typeof g === 'object' && g.targetTime ? `<span class="goal-target-time">${g.targetTime}m</span>` : '';
+                        return `<span class="goal-tag">${goalText}${targetTime}</span>`;
+                    }).join('')}
+                </div>
+               </div>`
+            : '';
+
         return `
-            <div class="session-item">
+            <div class="session-item" data-session-id="${id}">
                 <div class="session-header">
-                    <span class="session-time">${startTime.toLocaleString()}</span>
-                    <span class="session-duration">${formatTime(duration)}</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="session-time">${startDate}</div>
+                        <div class="session-duration">${formatTime(duration)}</div>
+                    </div>
+                    <div class="session-type-badge ${sessionTypeClass}">
+                        ${isGoalBased ? 'GOAL BASED' : 'QUICK START'}
+                    </div>
                 </div>
                 <div class="session-summary">
-                    ${websites.length > 0 ? `Visited ${websites.length} sites: ${topWebsites}${websites.length > 3 ? '...' : ''}` : 'No websites tracked'}
+                    ${goalsHtml}
+                    <div class="session-meta">
+                        <span>Ended: ${endDate}</span> |
+                        <span>Websites visited: ${websitesCount}</span>
+                    </div>
                 </div>
                 <div class="session-details">
-                    <p><strong>Start:</strong> ${startTime.toLocaleString()}</p>
-                    ${endTime ? `<p><strong>End:</strong> ${endTime.toLocaleString()}</p>` : ''}
-                    <p><strong>Duration:</strong> ${formatTime(duration)}</p>
-                    ${websites.length > 0 ? `
-                        <h5>Websites Visited:</h5>
-                        <ul class="website-list">
-                            ${Object.entries(session.websites)
-                                .sort(([,a], [,b]) => b - a)
-                                .map(([website, time]) => `
-                                    <li class="website-item">
-                                        <span>${website}</span>
-                                        <span>${formatTime(time)}</span>
-                                    </li>
-                                `).join('')}
-                        </ul>
-                    ` : '<p>No websites tracked during this session</p>'}
+                    <ul class="website-list">
+                        ${websites ? Object.entries(websites).map(([site, time]) => `
+                            <li class="website-item">
+                                <span>${site}</span>
+                                <span>${formatTime(time)}</span>
+                            </li>
+                        `).join('') : '<li>No website data tracked.</li>'}
+                    </ul>
                 </div>
             </div>
         `;
     }).join('');
 
-    // Add proper event listeners after content is rendered
-    sessionsList.querySelectorAll('.session-item').forEach(item => {
+    // Add click listeners to toggle details
+    container.querySelectorAll('.session-item').forEach(item => {
         item.addEventListener('click', () => {
             const details = item.querySelector('.session-details');
             if (details) {
@@ -391,4 +527,220 @@ function formatTime(milliseconds, short = false) {
     }
     const minutes = Math.round(milliseconds / 60000);
     return short ? `${minutes}m` : `${minutes} min`;
+}
+
+function displayGoalAnalytics(sessionHistory) {
+    const container = document.getElementById('goalAnalyticsContainer');
+    if (!container) return;
+
+    // Get all goal-based sessions
+    const goalSessions = sessionHistory.filter(session => 
+        session.goals && Array.isArray(session.goals) && session.goals.length > 0
+    );
+
+    if (goalSessions.length === 0) {
+        container.innerHTML = "<div class='no-goal-data'>No goal-based sessions found. Start a goal-based session to see analytics here.</div>";
+        return;
+    }
+
+    // Analyze goals
+    const goalStats = analyzeGoals(goalSessions);
+    
+    container.innerHTML = `
+        <div class="goal-analytics-container">
+            <div class="goal-header">
+                <div class="goal-title">Goal Performance Analytics</div>
+                <div class="goal-stats">
+                    <div class="goal-stat">
+                        <div class="goal-stat-number">${goalStats.totalGoals}</div>
+                        <div class="goal-stat-label">Goals Tackled</div>
+                    </div>
+                    <div class="goal-stat">
+                        <div class="goal-stat-number">${goalStats.completedGoals}</div>
+                        <div class="goal-stat-label">Goals Completed</div>
+                    </div>
+                    <div class="goal-stat">
+                        <div class="goal-stat-number">${goalStats.completionRate}%</div>
+                        <div class="goal-stat-label">Success Rate</div>
+                    </div>
+                    <div class="goal-stat">
+                        <div class="goal-stat-number">${goalStats.avgTargetTime}m</div>
+                        <div class="goal-stat-label">Avg. Target Time</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="goal-chart-section">
+                <h4>Goal Completion Over Time</h4>
+                <canvas id="goalChart" width="400" height="200"></canvas>
+            </div>
+            
+            <div class="goal-performance-section">
+                <h4>Goal Performance Breakdown</h4>
+                <div class="goal-performance-list">
+                    ${goalStats.goalBreakdown.map(goal => `
+                        <div class="goal-performance-item">
+                            <div class="goal-info">
+                                <div class="goal-name">${goal.text}</div>
+                                <div class="goal-meta">
+                                    <span class="goal-sessions">${goal.sessions} sessions</span>
+                                    ${goal.targetTime ? `<span class="goal-target">Target: ${goal.targetTime}m</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="goal-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${goal.completionRate}%"></div>
+                                </div>
+                                <div class="progress-text">${goal.completionRate}%</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Render goal completion chart
+    renderGoalChart(goalSessions);
+}
+
+function analyzeGoals(sessions) {
+    const goalMap = new Map();
+    let totalGoals = 0;
+    let completedGoals = 0;
+    let totalTargetTime = 0;
+    let targetTimeCount = 0;
+
+    sessions.forEach(session => {
+        session.goals.forEach(goal => {
+            const goalText = typeof goal === 'string' ? goal : goal.text;
+            const targetTime = typeof goal === 'object' && goal.targetTime ? goal.targetTime : null;
+            
+            if (!goalMap.has(goalText)) {
+                goalMap.set(goalText, {
+                    text: goalText,
+                    sessions: 0,
+                    targetTime: targetTime,
+                    totalTime: 0
+                });
+            }
+            
+            const goalData = goalMap.get(goalText);
+            goalData.sessions++;
+            goalData.totalTime += session.duration || 0;
+            
+            if (targetTime) {
+                totalTargetTime += targetTime;
+                targetTimeCount++;
+            }
+            
+            totalGoals++;
+        });
+    });
+
+    // Calculate completion rates
+    const goalBreakdown = Array.from(goalMap.values()).map(goal => {
+        const completionRate = goal.targetTime ? 
+            Math.min(100, Math.round((goal.totalTime / (goal.targetTime * 60000)) * 100)) : 
+            Math.round((goal.sessions / sessions.length) * 100);
+        
+        if (completionRate >= 100) completedGoals++;
+        
+        return {
+            ...goal,
+            completionRate
+        };
+    });
+
+    return {
+        totalGoals,
+        completedGoals,
+        completionRate: totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0,
+        avgTargetTime: targetTimeCount > 0 ? Math.round(totalTargetTime / targetTimeCount) : 0,
+        goalBreakdown: goalBreakdown.sort((a, b) => b.completionRate - a.completionRate)
+    };
+}
+
+function renderGoalChart(goalSessions) {
+    const ctx = document.getElementById('goalChart');
+    if (!ctx) return;
+
+    // Group sessions by date and calculate daily goal completion
+    const dailyData = {};
+    goalSessions.forEach(session => {
+        const date = new Date(session.startTime).toLocaleDateString();
+        if (!dailyData[date]) {
+            dailyData[date] = { total: 0, completed: 0 };
+        }
+        
+        session.goals.forEach(goal => {
+            const targetTime = typeof goal === 'object' && goal.targetTime ? goal.targetTime : null;
+            const sessionDuration = session.duration || 0;
+            
+            dailyData[date].total++;
+            if (targetTime && (sessionDuration / 60000) >= targetTime) {
+                dailyData[date].completed++;
+            }
+        });
+    });
+
+    const labels = Object.keys(dailyData);
+    const completionRates = labels.map(date => {
+        const data = dailyData[date];
+        return data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+    });
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Goal Completion Rate (%)',
+                data: completionRates,
+                borderColor: '#21d19f',
+                backgroundColor: 'rgba(33, 209, 159, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#21d19f',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#e0e0e0'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        color: '#a7a7a7',
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(167, 167, 167, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#a7a7a7'
+                    },
+                    grid: {
+                        color: 'rgba(167, 167, 167, 0.1)'
+                    }
+                }
+            }
+        }
+    });
 }

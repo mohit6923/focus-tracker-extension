@@ -19,13 +19,46 @@
             <div id="timer" class="timer">00:00:00</div>
         </div>
         
-        <div class="main-controls">
-            <button id="toggleFocus" class="btn btn-primary">Start Focus</button>
+        <div id="start-controls">
+            <div class="main-controls">
+                <button id="quickStart" class="btn btn-primary">Quick Start</button>
+                <button id="goalStart" class="btn btn-secondary">Goal-based</button>
+            </div>
+            <div class="secondary-controls">
+                <button id="viewAnalytics" class="btn btn-secondary">Analytics</button>
+            </div>
         </div>
 
-        <div class="secondary-controls">
-            <button id="pauseResume" class="btn btn-secondary" style="display: none;">Pause</button>
-            <button id="viewAnalytics" class="btn btn-secondary">Analytics</button>
+        <div id="session-controls" style="display: none;">
+            <div class="main-controls">
+                <button id="stopFocus" class="btn btn-primary danger">Stop Focus</button>
+            </div>
+            <div class="secondary-controls">
+                <button id="pauseResume" class="btn btn-secondary">Pause</button>
+            </div>
+        </div>
+
+        <div id="goal-controls" style="display: none;">
+            <div class="header">
+                <h3>Set Your Goals</h3>
+            </div>
+            <div id="goal-list-container">
+                <!-- Goals will be dynamically inserted here -->
+            </div>
+            <div class="goal-input-container">
+                <div class="input-wrapper">
+                    <input type="text" id="new-goal-input" placeholder="Add a new goal...">
+                    <div class="time-input-wrapper">
+                        <span class="time-icon"></span>
+                        <input type="number" id="target-time-input" placeholder="min" min="1">
+                    </div>
+                </div>
+                <button id="add-goal-btn" class="btn btn-secondary">+</button>
+            </div>
+            <button id="start-goal-session" class="btn btn-primary" disabled>Select at least one goal</button>
+            <div class="secondary-controls">
+                <button id="back-to-main" class="btn btn-secondary">Back</button>
+            </div>
         </div>
 
         <div class="daily-stats">

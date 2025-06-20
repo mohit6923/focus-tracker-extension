@@ -38,8 +38,8 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.toggleFocus !== undefined) {
         try {
             if (request.toggleFocus && request.isFocusModeOn) {
-                console.log("Starting focus session...");
-                const session = startFocusSession();
+                console.log("Starting focus session with goals:", request.goals);
+                const session = startFocusSession(request.goals);
                 sendResponse({success: true, action: "started", startTime: session.startTime});
             } else if (request.toggleFocus && !request.isFocusModeOn) {
                 console.log("Stopping focus session...");
@@ -76,7 +76,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     return true;
 });
 
-function startFocusSession() {
+function startFocusSession(goals = []) {
     try {
         // Clear any existing session first
         if (currentSessionId) {
@@ -98,7 +98,8 @@ function startFocusSession() {
             startTime: sessionStartTime,
             endTime: null,
             duration: 0,
-            websites: {}
+            websites: {},
+            goals: goals
         };
         
         chrome.storage.local.get("sessionHistory", function (data) {
@@ -112,7 +113,7 @@ function startFocusSession() {
                 if (chrome.runtime.lastError) {
                     console.error("Error starting session:", chrome.runtime.lastError);
                 } else {
-                    console.log("Focus session started:", currentSessionId);
+                    console.log("Focus session started:", currentSessionId, "with goals:", sessionData.goals);
                 }
             });
         });
@@ -175,6 +176,8 @@ function stopFocusSessionInternal() {
                 currentSession.endTime = endTime;
                 currentSession.duration = duration > 0 ? duration : 0;
                 currentSession.websites = data.focusSessionData || {};
+                // Preserve the goals data - don't overwrite it
+                // currentSession.goals should already exist from when the session was created
                 
                 chrome.storage.local.set({ 
                     sessionHistory: history,
@@ -185,7 +188,7 @@ function stopFocusSessionInternal() {
                     if (chrome.runtime.lastError) {
                         console.error("Error stopping session:", chrome.runtime.lastError);
                     } else {
-                        console.log("Focus session stopped:", currentSessionId, "Duration:", duration);
+                        console.log("Focus session stopped:", currentSessionId, "Duration:", duration, "Goals:", currentSession.goals);
                     }
                     clearSessionState();
                 });
