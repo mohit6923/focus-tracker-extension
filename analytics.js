@@ -1,61 +1,142 @@
 document.addEventListener("DOMContentLoaded", function () {
-    console.log("Analytics page loaded");
-    
-    const loadingMessage = document.getElementById("loadingMessage");
-    const mainContent = document.getElementById("mainContent");
-    
-    // Check if Chart.js loaded properly
     if (typeof Chart === 'undefined') {
-        console.error("Chart.js not loaded!");
-        loadingMessage.innerHTML = "Error: Chart.js library failed to load. Please check your internet connection.";
+        document.body.innerHTML = "Error: Chart.js failed to load.";
         return;
     }
     
-    // Set up tab switching
     setupTabSwitching();
     
-    chrome.storage.local.get(["sessionHistory", "focusSessionData"], function (data) {
-        console.log("Retrieved data:", data);
-        
+    chrome.storage.local.get("sessionHistory", function (data) {
+        const loadingMessage = document.getElementById("loadingMessage");
+        const mainContent = document.getElementById("mainContent");
         const sessionHistory = data.sessionHistory || [];
-        const currentSessionData = data.focusSessionData || {};
         
         if (sessionHistory.length === 0) {
             loadingMessage.innerHTML = "<div class='no-data'>No focus sessions found. Start a focus session to see analytics here.</div>";
             return;
         }
         
-        // Hide loading and show content
         loadingMessage.style.display = "none";
         mainContent.style.display = "block";
         
-        // Process and display analytics
-        displayAnalytics(sessionHistory, currentSessionData);
+        displayAnalytics(sessionHistory);
     });
 });
 
 function setupTabSwitching() {
-    // Add event listeners to all tab buttons
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabName = this.getAttribute('data-tab');
-            showTab(tabName);
+            
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            this.classList.add('active');
         });
     });
 }
 
-function displayAnalytics(sessionHistory, currentSessionData) {
-    // Calculate statistics
+function displayAnalytics(sessionHistory) {
     const stats = calculateStats(sessionHistory);
     updateStatsCards(stats);
     
-    // Create charts
-    createDailyChart(sessionHistory);
-    createDurationChart(sessionHistory);
-    createWebsitesChart(sessionHistory);
+    renderDailyFocusChart(sessionHistory);
+    renderSessionDurationChart(sessionHistory);
+    renderWebsiteChart(sessionHistory);
     
-    // Display sessions list
     displaySessionsList(sessionHistory);
+    displayWebsiteBreakdown(sessionHistory);
+}
+
+function displayWebsiteBreakdown(sessions) {
+    const container = document.getElementById('websiteByDayContainer');
+    if (!container) return;
+
+    const websitesByDay = sessions.reduce((acc, session) => {
+        if (!session.startTime || !session.websites) return acc;
+        const date = new Date(session.startTime).toDateString();
+        if (!acc[date]) {
+            acc[date] = {};
+        }
+        for (const [website, time] of Object.entries(session.websites)) {
+            acc[date][website] = (acc[date][website] || 0) + time;
+        }
+        return acc;
+    }, {});
+
+    // Sort dates to show most recent first
+    const dates = Object.keys(websitesByDay).sort((a, b) => new Date(b) - new Date(a));
+    if (dates.length === 0) {
+        container.innerHTML = "<div class='no-data'>No website data to display.</div>";
+        return;
+    }
+
+    // Create day selector
+    const daySelector = document.createElement('select');
+    daySelector.className = 'day-selector';
+    daySelector.innerHTML = dates.map(date => `<option value="${date}">${date}</option>`).join('');
+    container.appendChild(daySelector);
+
+    const breakdownContent = document.createElement('div');
+    breakdownContent.className = 'website-breakdown';
+    container.appendChild(breakdownContent);
+    
+    daySelector.addEventListener('change', () => renderDay(daySelector.value));
+
+    function renderDay(date) {
+        const dayData = websitesByDay[date];
+        const categorized = categorizeWebsites(dayData);
+
+        breakdownContent.innerHTML = Object.entries(categorized).map(([category, sites]) => {
+            const sortedSites = Object.entries(sites).sort(([, a], [, b]) => b - a);
+            return `
+                <div class="category-container">
+                    <h4 class="category-title">${category}</h4>
+                    <ul class="website-list">
+                        ${sortedSites.map(([site, time]) => `
+                            <li class="website-item">
+                                <span>${site}</span>
+                                <span>${formatTime(time)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Initial render for the most recent day
+    if (dates.length > 0) {
+        renderDay(dates[0]);
+    }
+}
+
+function categorizeWebsites(websiteData) {
+    const categories = {
+        'Social Media': ['facebook.com', 'twitter.com', 'instagram.com', 'linkedin.com', 'reddit.com'],
+        'Video & Entertainment': ['youtube.com', 'netflix.com', 'hulu.com', 'twitch.tv'],
+        'News & Information': ['cnn.com', 'nytimes.com', 'bbc.com', 'wikipedia.org'],
+        'Developer Tools': ['github.com', 'stackoverflow.com', 'developer.mozilla.org'],
+        'Shopping': ['amazon.com', 'ebay.com', 'walmart.com'],
+        'Other': []
+    };
+
+    const categorizedData = {};
+    for (const [site, time] of Object.entries(websiteData)) {
+        let category = 'Other';
+        for (const [cat, domains] of Object.entries(categories)) {
+            if (domains.some(domain => site.includes(domain))) {
+                category = cat;
+                break;
+            }
+        }
+        if (!categorizedData[category]) {
+            categorizedData[category] = {};
+        }
+        categorizedData[category][site] = time;
+    }
+    return categorizedData;
 }
 
 function calculateStats(sessionHistory) {
@@ -86,165 +167,129 @@ function updateStatsCards(stats) {
     document.getElementById("uniqueWebsites").textContent = stats.uniqueWebsites;
 }
 
-function createDailyChart(sessionHistory) {
-    const dailyData = {};
-    
-    sessionHistory.forEach(session => {
-        if (session.startTime) {
-            const date = new Date(session.startTime).toDateString();
-            const duration = session.duration || 0;
-            
-            if (dailyData[date]) {
-                dailyData[date] += duration;
-            } else {
-                dailyData[date] = duration;
-            }
-        }
+function renderDailyFocusChart(sessions) {
+    if (!document.getElementById('dailyFocusChart')) return;
+
+    // Calculate the date 7 days ago
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0); // Set to the beginning of the day
+
+    // Filter sessions to include only the last 7 days
+    const recentSessions = sessions.filter(session => {
+        return session.startTime && new Date(session.startTime) >= sevenDaysAgo;
     });
-    
-    const labels = Object.keys(dailyData).map(date => {
-        const d = new Date(date);
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    });
-    
-    const data = Object.values(dailyData).map(duration => duration / (1000 * 60)); // Convert to minutes
-    
-    const ctx = document.getElementById("dailyChart").getContext("2d");
+
+    const dailyData = recentSessions.reduce((acc, session) => {
+        if (!session.duration) return acc;
+        const date = new Date(session.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        acc[date] = (acc[date] || 0) + session.duration;
+        return acc;
+    }, {});
+
+    const chartData = {
+        labels: Object.keys(dailyData),
+        datasets: [{
+            label: 'Total Focus Time (minutes)',
+            data: Object.values(dailyData).map(d => (d / 60000).toFixed(2)),
+            backgroundColor: '#00a8cc',
+            borderColor: '#00a8cc',
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    };
+
+    const ctx = document.getElementById('dailyFocusChart').getContext('2d');
     new Chart(ctx, {
-        type: "bar",
-        data: {
-            labels: labels,
-            datasets: [{
-                label: "Focus Time (minutes)",
-                data: data,
-                backgroundColor: "#2196F3",
-                borderColor: "#1976D2",
-                borderWidth: 1
-            }]
-        },
+        type: 'bar',
+        data: chartData,
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: "Minutes"
-                    }
-                }
+            scales: { 
+                y: { beginAtZero: true, ticks: { color: '#a7a7a7' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                x: { ticks: { color: '#a7a7a7' }, grid: { display: false } }
             },
-            plugins: {
-                legend: {
-                    display: false
-                }
-            }
+            plugins: { legend: { display: false } }
         }
     });
 }
 
-function createDurationChart(sessionHistory) {
-    const durations = sessionHistory
-        .filter(session => session.duration)
-        .map(session => session.duration / (1000 * 60)); // Convert to minutes
-    
-    if (durations.length === 0) return;
-    
-    // Create duration ranges
-    const ranges = [
-        { min: 0, max: 15, label: "0-15 min" },
-        { min: 15, max: 30, label: "15-30 min" },
-        { min: 30, max: 60, label: "30-60 min" },
-        { min: 60, max: 120, label: "1-2 hours" },
-        { min: 120, max: Infinity, label: "2+ hours" }
-    ];
-    
-    const rangeCounts = ranges.map(range => {
-        return durations.filter(duration => 
-            duration >= range.min && duration < range.max
-        ).length;
-    });
-    
-    const labels = ranges.map(range => range.label);
-    
-    const ctx = document.getElementById("durationChart").getContext("2d");
+function renderSessionDurationChart(sessions) {
+    if (!document.getElementById('sessionDurationChart')) return;
+    const validSessions = sessions.filter(s => s.duration && s.startTime);
+    if (validSessions.length === 0) return;
+
+    const durations = validSessions.map(s => s.duration / 60000);
+    const labels = validSessions.map(s => new Date(s.startTime).toLocaleString());
+
+    const chartData = {
+        labels: labels,
+        datasets: [{
+            label: 'Session Duration (minutes)',
+            data: durations,
+            backgroundColor: 'rgba(250, 10, 109, 0.2)',
+            borderColor: '#fa0a6d',
+            pointBackgroundColor: '#fa0a6d',
+            fill: true,
+            tension: 0.4
+        }]
+    };
+
+    const ctx = document.getElementById('sessionDurationChart').getContext('2d');
     new Chart(ctx, {
-        type: "doughnut",
-        data: {
-            labels: labels,
-            datasets: [{
-                data: rangeCounts,
-                backgroundColor: [
-                    "#FF6384",
-                    "#36A2EB",
-                    "#FFCE56",
-                    "#4BC0C0",
-                    "#9966FF"
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
+        type: 'line',
+        data: chartData,
+        options: { 
+            responsive: true, 
             maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
+            scales: { 
+                y: { beginAtZero: true, ticks: { color: '#a7a7a7' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                x: { ticks: { color: '#a7a7a7' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+            },
+            plugins: { legend: { display: false } }
         }
     });
 }
 
-function createWebsitesChart(sessionHistory) {
-    const websiteData = {};
-    
-    sessionHistory.forEach(session => {
+function renderWebsiteChart(sessions) {
+    if (!document.getElementById('websiteChart')) return;
+    const websiteData = sessions.reduce((acc, session) => {
         if (session.websites) {
-            Object.entries(session.websites).forEach(([website, time]) => {
-                if (websiteData[website]) {
-                    websiteData[website] += time;
-                } else {
-                    websiteData[website] = time;
-                }
-            });
+            for (const [website, time] of Object.entries(session.websites)) {
+                acc[website] = (acc[website] || 0) + time;
+            }
         }
-    });
-    
-    // Sort by time and take top 10
+        return acc;
+    }, {});
+
     const sortedWebsites = Object.entries(websiteData)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 10);
-    
-    const labels = sortedWebsites.map(([website]) => website);
-    const data = sortedWebsites.map(([, time]) => time / (1000 * 60)); // Convert to minutes
-    
-    const ctx = document.getElementById("websitesChart").getContext("2d");
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 8);
+
+    if (sortedWebsites.length === 0) return;
+
+    const chartData = {
+        labels: sortedWebsites.map(([website]) => website),
+        datasets: [{
+            label: 'Time Spent (minutes)',
+            data: sortedWebsites.map(([, time]) => (time / 60000).toFixed(2)),
+            backgroundColor: ['#00a8cc', '#fa0a6d', '#7c3aed', '#ff7a00', '#21d19f', '#ffc107', '#f44336', '#673ab7'],
+            borderWidth: 0
+        }]
+    };
+
+    const ctx = document.getElementById('websiteChart').getContext('2d');
     new Chart(ctx, {
-        type: "bar",
-        data: {
-            labels: labels,
-            datasets: [{
-                label: "Time Spent (minutes)",
-                data: data,
-                backgroundColor: "#2196F3"
-            }]
-        },
-        options: {
-            responsive: true,
+        type: 'doughnut',
+        data: chartData,
+        options: { 
+            responsive: true, 
             maintainAspectRatio: false,
-            indexAxis: 'y',
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: "Minutes"
-                    }
-                }
-            },
             plugins: {
-                legend: {
-                    display: false
+                legend: { 
+                    position: 'right',
+                    labels: { color: '#e0e0e0', font: { size: 14 } } 
                 }
             }
         }
@@ -253,18 +298,18 @@ function createWebsitesChart(sessionHistory) {
 
 function displaySessionsList(sessionHistory) {
     const sessionsList = document.getElementById("sessionsList");
+    if (!sessionsList) return;
     
     if (sessionHistory.length === 0) {
         sessionsList.innerHTML = "<div class='no-data'>No sessions found</div>";
         return;
     }
     
-    // Sort sessions by start time (newest first)
     const sortedSessions = sessionHistory
         .filter(session => session.startTime)
         .sort((a, b) => b.startTime - a.startTime);
     
-    sessionsList.innerHTML = sortedSessions.map((session, index) => {
+    sessionsList.innerHTML = sortedSessions.map((session) => {
         const startTime = new Date(session.startTime);
         const endTime = session.endTime ? new Date(session.endTime) : null;
         const duration = session.duration || 0;
@@ -273,7 +318,7 @@ function displaySessionsList(sessionHistory) {
         const topWebsites = websites.slice(0, 3).join(", ");
         
         return `
-            <div class="session-item" data-session-index="${index}">
+            <div class="session-item">
                 <div class="session-header">
                     <div class="session-time">${startTime.toLocaleString()}</div>
                     <div class="session-duration">${formatTime(duration)}</div>
@@ -281,7 +326,7 @@ function displaySessionsList(sessionHistory) {
                 <div class="session-websites">
                     ${websites.length > 0 ? `Visited: ${topWebsites}${websites.length > 3 ? '...' : ''}` : 'No websites tracked'}
                 </div>
-                <div class="session-details" id="session-${index}">
+                <div class="session-details">
                     <h4>Session Details</h4>
                     <p><strong>Start:</strong> ${startTime.toLocaleString()}</p>
                     ${endTime ? `<p><strong>End:</strong> ${endTime.toLocaleString()}</p>` : ''}
@@ -303,53 +348,23 @@ function displaySessionsList(sessionHistory) {
             </div>
         `;
     }).join('');
-    
-    // Add event listeners to session items
-    document.querySelectorAll('.session-item').forEach(item => {
-        item.addEventListener('click', function() {
-            const index = this.getAttribute('data-session-index');
-            toggleSessionDetails(index);
+
+    // Add proper event listeners after content is rendered
+    sessionsList.querySelectorAll('.session-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const details = item.querySelector('.session-details');
+            if (details) {
+                details.classList.toggle('active');
+            }
         });
     });
 }
 
-function toggleSessionDetails(index) {
-    const detailsElement = document.getElementById(`session-${index}`);
-    detailsElement.classList.toggle('active');
-}
-
-function showTab(tabName) {
-    // Hide all tab contents
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    // Remove active class from all tabs
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Show selected tab content
-    document.getElementById(`${tabName}Tab`).classList.add('active');
-    
-    // Add active class to clicked tab
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-}
-
 function formatTime(milliseconds, short = false) {
-    if (!milliseconds || milliseconds === 0) return "0m";
-    
-    const minutes = Math.floor(milliseconds / (1000 * 60));
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    
-    if (short) {
-        return `${minutes}m`;
+    if (milliseconds < 60000) {
+        const seconds = Math.round(milliseconds / 1000);
+        return short ? `${seconds}s` : `${seconds} sec`;
     }
-    
-    if (hours > 0) {
-        return `${hours}h ${remainingMinutes}m`;
-    } else {
-        return `${minutes}m`;
-    }
+    const minutes = Math.round(milliseconds / 60000);
+    return short ? `${minutes}m` : `${minutes} min`;
 }

@@ -2,15 +2,20 @@ let lastActiveTab = null;
 let lastActivityTime = null;
 let currentSessionId = null;
 let sessionStartTime = null;
+let isPaused = false;
+let pauseStartTime = null;
+let totalPausedTime = 0;
 
 // Add a simple test to verify the background script is loaded
 console.log("Background script loaded at:", new Date().toISOString());
 
 // Restore session state on startup
-chrome.storage.local.get("currentSessionId", function(data) {
+chrome.storage.local.get(["currentSessionId", "isPaused"], function(data) {
     if (data.currentSessionId) {
         console.log("Restoring session state:", data.currentSessionId);
         currentSessionId = data.currentSessionId;
+        isPaused = data.isPaused || false;
+        
         // Get the session start time from storage
         chrome.storage.local.get("sessionHistory", function(sessionData) {
             const history = sessionData.sessionHistory || [];
@@ -18,7 +23,10 @@ chrome.storage.local.get("currentSessionId", function(data) {
             if (session && session.startTime) {
                 sessionStartTime = session.startTime;
                 lastActivityTime = Date.now();
-                console.log("Session restored:", currentSessionId, "started at:", sessionStartTime);
+                if (isPaused) {
+                    pauseStartTime = Date.now();
+                }
+                console.log("Session restored:", currentSessionId, "started at:", sessionStartTime, "Paused:", isPaused);
             }
         });
     }
@@ -44,6 +52,22 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
             console.error("Error handling message:", error);
             sendResponse({success: false, error: error.message});
         }
+    } else if (request.togglePause !== undefined) {
+        if (request.isPaused) {
+            console.log("Pausing session");
+            isPaused = true;
+            pauseStartTime = Date.now();
+            recordTime(); // Record time up to the pause
+        } else {
+            console.log("Resuming session");
+            isPaused = false;
+            if (pauseStartTime) {
+                totalPausedTime += Date.now() - pauseStartTime;
+            }
+            lastActivityTime = Date.now(); // Reset activity time on resume
+        }
+        chrome.storage.local.set({ isPaused: isPaused });
+        sendResponse({success: true});
     } else {
         sendResponse({success: false, error: "Unknown request"});
     }
@@ -63,6 +87,8 @@ function startFocusSession() {
         currentSessionId = generateSessionId();
         sessionStartTime = new Date().getTime();
         lastActivityTime = sessionStartTime;
+        isPaused = false;
+        totalPausedTime = 0;
         
         console.log("Creating session:", currentSessionId, "at:", sessionStartTime);
         
@@ -80,7 +106,8 @@ function startFocusSession() {
             history.push(sessionData);
             chrome.storage.local.set({ 
                 sessionHistory: history,
-                currentSessionId: currentSessionId
+                currentSessionId: currentSessionId,
+                isPaused: false
             }, function() {
                 if (chrome.runtime.lastError) {
                     console.error("Error starting session:", chrome.runtime.lastError);
@@ -134,7 +161,7 @@ function stopFocusSession() {
 function stopFocusSessionInternal() {
     if (currentSessionId && sessionStartTime) {
         const endTime = new Date().getTime();
-        const duration = endTime - sessionStartTime;
+        const duration = (endTime - sessionStartTime) - totalPausedTime;
         
         console.log("Session duration:", duration, "ms");
         
@@ -144,13 +171,14 @@ function stopFocusSessionInternal() {
             
             if (currentSession) {
                 currentSession.endTime = endTime;
-                currentSession.duration = duration;
+                currentSession.duration = duration > 0 ? duration : 0;
                 currentSession.websites = data.focusSessionData || {};
                 
                 chrome.storage.local.set({ 
                     sessionHistory: history,
                     currentSessionId: null,
-                    focusSessionData: {}
+                    focusSessionData: {},
+                    isPaused: false
                 }, function() {
                     if (chrome.runtime.lastError) {
                         console.error("Error stopping session:", chrome.runtime.lastError);
@@ -164,7 +192,8 @@ function stopFocusSessionInternal() {
                 // Force clear the session anyway
                 chrome.storage.local.set({
                     currentSessionId: null,
-                    focusSessionData: {}
+                    focusSessionData: {},
+                    isPaused: false
                 }, function() {
                     clearSessionState();
                 });
@@ -175,7 +204,8 @@ function stopFocusSessionInternal() {
         // Force clear even if no session
         chrome.storage.local.set({
             currentSessionId: null,
-            focusSessionData: {}
+            focusSessionData: {},
+            isPaused: false
         }, function() {
             clearSessionState();
         });
@@ -188,6 +218,9 @@ function clearSessionState() {
     lastActivityTime = null;
     currentSessionId = null;
     sessionStartTime = null;
+    isPaused = false;
+    pauseStartTime = null;
+    totalPausedTime = 0;
     
     chrome.tabs.onActivated.removeListener(handleTabActivation);
     chrome.tabs.onUpdated.removeListener(handleTabUpdate);
@@ -212,7 +245,7 @@ function handleTabUpdate(tabId, changeInfo, tab) {
 }
 
 function recordTime() {
-    if (lastActiveTab && lastActivityTime && currentSessionId) {
+    if (lastActiveTab && lastActivityTime && currentSessionId && !isPaused) {
         const now = new Date().getTime();
         const timeSpent = now - lastActivityTime;
         

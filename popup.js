@@ -1,36 +1,39 @@
 let isFocusModeOn = false;
+let isPaused = false;
 let sessionStartTime = null;
-let sessionTimer = null;
 let userInitiatedStop = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Popup loaded at:", new Date().toISOString());
     
-    // Check current session status
-    checkSessionStatus();
-    
     // Set up event listeners
     document.getElementById('toggleFocus').addEventListener('click', toggleFocus);
+    document.getElementById('pauseResume').addEventListener('click', togglePause);
     document.getElementById('viewAnalytics').addEventListener('click', openAnalytics);
     
-    // Update timer immediately and then every second
-    updateTimer();
+    // Initial state check
+    checkSessionStatus();
+    
+    // Update timer every second
     setInterval(updateTimer, 1000);
     
-    // Sync with background every 5 seconds
-    setInterval(syncWithBackground, 5000);
+    // Sync with background and update stats periodically
+    setInterval(() => {
+        syncWithBackground();
+        updateDailyStats();
+    }, 5000);
 });
 
 function checkSessionStatus() {
     console.log("Checking session status...");
-    chrome.storage.local.get(['currentSessionId', 'sessionHistory'], function(data) {
+    chrome.storage.local.get(['currentSessionId', 'sessionHistory', 'isPaused'], function(data) {
         console.log("Storage data:", data);
         
-        if (data.currentSessionId) {
+        isFocusModeOn = !!data.currentSessionId;
+        isPaused = data.isPaused || false;
+        
+        if (isFocusModeOn) {
             console.log("Found active session:", data.currentSessionId);
-            isFocusModeOn = true;
-            
-            // Find the session in history to get start time
             const history = data.sessionHistory || [];
             const currentSession = history.find(session => session.id === data.currentSessionId);
             
@@ -43,11 +46,11 @@ function checkSessionStatus() {
             }
             
             updateUI();
+            updateDailyStats();
             // Update timer immediately after UI update
             updateTimer();
         } else {
             console.log("No active session found");
-            isFocusModeOn = false;
             sessionStartTime = null;
             updateUI();
             // Update timer immediately after UI update
@@ -68,6 +71,20 @@ function syncWithBackground() {
             }
         });
     }
+}
+
+function updateDailyStats() {
+    chrome.storage.local.get('sessionHistory', function(data) {
+        const history = data.sessionHistory || [];
+        const today = new Date().toDateString();
+
+        const todaySessions = history.filter(s => new Date(s.startTime).toDateString() === today);
+        const totalTime = todaySessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+
+        const minutes = Math.floor(totalTime / 60000);
+        document.getElementById('todayTime').textContent = `${minutes}m`;
+        document.getElementById('todaySessions').textContent = todaySessions.length;
+    });
 }
 
 function toggleFocus() {
@@ -92,6 +109,13 @@ function toggleFocus() {
     }
 }
 
+function togglePause() {
+    isPaused = !isPaused;
+    chrome.storage.local.set({ isPaused: isPaused });
+    chrome.runtime.sendMessage({ togglePause: true, isPaused: isPaused });
+    updateUI();
+}
+
 function startFocusSession() {
     console.log("Starting focus session...");
     return new Promise((resolve, reject) => {
@@ -101,7 +125,10 @@ function startFocusSession() {
                 isFocusModeOn = true;
                 sessionStartTime = Date.now();
                 userInitiatedStop = false;
+                isPaused = false;
+                chrome.storage.local.set({ isPaused: false });
                 updateUI();
+                updateDailyStats();
                 resolve();
             } else {
                 console.error("Failed to start session:", response);
@@ -119,7 +146,10 @@ function stopFocusSession() {
             if (response && response.success) {
                 isFocusModeOn = false;
                 sessionStartTime = null;
+                isPaused = false;
+                chrome.storage.local.set({ isPaused: false });
                 updateUI();
+                updateDailyStats();
                 resolve();
             } else {
                 console.error("Failed to stop session:", response);
@@ -131,27 +161,34 @@ function stopFocusSession() {
 
 function updateUI() {
     const toggleButton = document.getElementById('toggleFocus');
-    const statusText = document.getElementById('status');
-    const timerText = document.getElementById('timer');
+    const pauseButton = document.getElementById('pauseResume');
+    const statusContainer = document.getElementById('status');
+    const statusText = statusContainer.querySelector('.status-text');
     
     if (isFocusModeOn) {
         toggleButton.textContent = 'Stop Focus';
-        toggleButton.className = 'btn btn-danger';
-        statusText.textContent = 'Focus Mode: ON';
-        statusText.className = 'text-success';
+        toggleButton.className = 'btn btn-primary danger';
+
+        statusContainer.className = 'status-badge on';
+        statusText.textContent = isPaused ? 'PAUSED' : 'ON';
+        
+        pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+        pauseButton.style.display = 'block';
     } else {
         toggleButton.textContent = 'Start Focus';
-        toggleButton.className = 'btn btn-success';
-        statusText.textContent = 'Focus Mode: OFF';
-        statusText.className = 'text-danger';
-        timerText.textContent = '00:00:00';
+        toggleButton.className = 'btn btn-primary';
+        
+        statusContainer.className = 'status-badge off';
+        statusText.textContent = 'OFF';
+
+        pauseButton.style.display = 'none';
     }
 }
 
 function updateTimer() {
     const timerText = document.getElementById('timer');
     
-    if (isFocusModeOn && sessionStartTime) {
+    if (isFocusModeOn && sessionStartTime && !isPaused) {
         const now = Date.now();
         const elapsed = now - sessionStartTime;
         const hours = Math.floor(elapsed / 3600000);

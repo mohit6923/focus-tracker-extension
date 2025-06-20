@@ -3,20 +3,40 @@
 <head>
     <title>Focus Tracker</title>
     <link rel="stylesheet" type="text/css" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h2>Focus Tracker</h2>
-        
+        <div class="header">
+            <h2>Focus Tracker</h2>
+        </div>
+
         <div class="status-section">
-            <div id="status">Focus Mode: OFF</div>
-            <div id="timer" class="timer"></div>
+            <div id="status" class="status-badge">
+                <span class="status-icon"></span>
+                <span class="status-text">OFF</span>
+            </div>
+            <div id="timer" class="timer">00:00:00</div>
         </div>
         
-        <button id="toggleFocus" class="btn btn-success">Start Focus</button>
-        
-        <div class="analytics-section">
-            <button id="viewAnalytics" class="btn btn-secondary">View Analytics</button>
+        <div class="main-controls">
+            <button id="toggleFocus" class="btn btn-primary">Start Focus</button>
+        </div>
+
+        <div class="secondary-controls">
+            <button id="pauseResume" class="btn btn-secondary" style="display: none;">Pause</button>
+            <button id="viewAnalytics" class="btn btn-secondary">Analytics</button>
+        </div>
+
+        <div class="daily-stats">
+            <div class="stat-item">
+                <span class="stat-value" id="todayTime">0m</span>
+                <span class="stat-label">Today's Focus</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="todaySessions">0</span>
+                <span class="stat-label">Sessions Today</span>
+            </div>
         </div>
     </div>
     
