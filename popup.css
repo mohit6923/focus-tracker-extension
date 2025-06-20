@@ -205,7 +205,7 @@ h2 {
     display: flex;
     gap: 8px;
     margin-bottom: 15px;
-    align-items: stretch;
+    align-items: center;
 }
 
 .input-wrapper {
@@ -312,12 +312,35 @@ h2 {
     background-color: #00a8cc;
 }
 
+/* Remove custom CSS '+' and revert to a simpler, bolder button */
 #add-goal-btn {
     flex-shrink: 0;
     width: 42px;
+    height: 42px;
+    aspect-ratio: 1 / 1;
     padding: 0;
-    font-size: 1.6em;
+    border: none;
+    background: linear-gradient(135deg, #21d19f, #00a8cc);
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    font-size: 28px;
+    font-weight: 300;
     line-height: 42px;
+    text-align: center;
+    padding-bottom: 2px;
+}
+
+#add-goal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 168, 204, 0.3);
+}
+
+#add-goal-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 168, 204, 0.3);
 }
 
 .goal-selection-container {
