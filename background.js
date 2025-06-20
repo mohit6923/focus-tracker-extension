@@ -5,6 +5,7 @@ let sessionStartTime = null;
 let isPaused = false;
 let pauseStartTime = null;
 let totalPausedTime = 0;
+let focusSessionDataMemory = {};
 
 // Add a simple test to verify the background script is loaded
 console.log("Background script loaded at:", new Date().toISOString());
@@ -39,8 +40,10 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         try {
             if (request.toggleFocus && request.isFocusModeOn) {
                 console.log("Starting focus session with goals:", request.goals);
-                const session = startFocusSession(request.goals);
-                sendResponse({success: true, action: "started", startTime: session.startTime});
+                startFocusSession(request.goals, function(session) {
+                    sendResponse({success: true, action: "started", startTime: session.startTime});
+                });
+                return true; // Keep the message channel open for async response
             } else if (request.toggleFocus && !request.isFocusModeOn) {
                 console.log("Stopping focus session...");
                 stopFocusSession();
@@ -76,22 +79,30 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     return true;
 });
 
-function startFocusSession(goals = []) {
-    try {
-        // Clear any existing session first
-        if (currentSessionId) {
-            console.log("Clearing existing session before starting new one");
-            stopFocusSession();
+function startFocusSession(goals = [], callback) {
+    // Clear any existing session first
+    if (currentSessionId) {
+        console.log("Clearing existing session before starting new one");
+        stopFocusSession();
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (tabs.length > 0) {
+            lastActiveTab = tabs[0];
+            lastActivityTime = Date.now();
+        } else {
+            lastActiveTab = null;
+            lastActivityTime = null;
         }
-        
+
         currentSessionId = generateSessionId();
         sessionStartTime = new Date().getTime();
-        lastActivityTime = sessionStartTime;
         isPaused = false;
         totalPausedTime = 0;
-        
+        focusSessionDataMemory = {};
+
         console.log("Creating session:", currentSessionId, "at:", sessionStartTime);
-        
+
         // Initialize session data
         const sessionData = {
             id: currentSessionId,
@@ -101,7 +112,7 @@ function startFocusSession(goals = []) {
             websites: {},
             goals: goals
         };
-        
+
         chrome.storage.local.get("sessionHistory", function (data) {
             const history = data.sessionHistory || [];
             history.push(sessionData);
@@ -115,23 +126,13 @@ function startFocusSession(goals = []) {
                 } else {
                     console.log("Focus session started:", currentSessionId, "with goals:", sessionData.goals);
                 }
+                // Only now add listeners and call callback/UI update
+                chrome.tabs.onActivated.addListener(handleTabActivation);
+                chrome.tabs.onUpdated.addListener(handleTabUpdate);
+                if (callback) callback(sessionData);
             });
         });
-        
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            if (tabs.length > 0) {
-                lastActiveTab = tabs[0];
-            }
-        });
-        
-        chrome.tabs.onActivated.addListener(handleTabActivation);
-        chrome.tabs.onUpdated.addListener(handleTabUpdate);
-        
-        return sessionData;
-        
-    } catch (error) {
-        console.error("Error in startFocusSession:", error);
-    }
+    });
 }
 
 function stopFocusSession() {
@@ -162,63 +163,69 @@ function stopFocusSession() {
 }
 
 function stopFocusSessionInternal() {
-    if (currentSessionId && sessionStartTime) {
-        const endTime = new Date().getTime();
-        const duration = (endTime - sessionStartTime) - totalPausedTime;
-        
-        console.log("Session duration:", duration, "ms");
-        
-        chrome.storage.local.get(["sessionHistory", "focusSessionData"], function (data) {
-            const history = data.sessionHistory || [];
-            const currentSession = history.find(session => session.id === currentSessionId);
+    recordTime(function() {
+        if (currentSessionId && sessionStartTime) {
+            const endTime = new Date().getTime();
+            const duration = (endTime - sessionStartTime) - totalPausedTime;
             
-            if (currentSession) {
-                currentSession.endTime = endTime;
-                currentSession.duration = duration > 0 ? duration : 0;
-                currentSession.websites = data.focusSessionData || {};
-                // Preserve the goals data - don't overwrite it
-                // currentSession.goals should already exist from when the session was created
+            console.log("Session duration:", duration, "ms");
+            
+            chrome.storage.local.get(["sessionHistory"], function (data) {
+                const history = data.sessionHistory || [];
+                const currentSession = history.find(session => session.id === currentSessionId);
                 
-                chrome.storage.local.set({ 
-                    sessionHistory: history,
-                    currentSessionId: null,
-                    focusSessionData: {},
-                    isPaused: false
-                }, function() {
-                    if (chrome.runtime.lastError) {
-                        console.error("Error stopping session:", chrome.runtime.lastError);
-                    } else {
-                        console.log("Focus session stopped:", currentSessionId, "Duration:", duration, "Goals:", currentSession.goals);
-                    }
-                    clearSessionState();
-                });
-            } else {
-                console.error("Could not find session to stop:", currentSessionId);
-                // Force clear the session anyway
-                chrome.storage.local.set({
-                    currentSessionId: null,
-                    focusSessionData: {},
-                    isPaused: false
-                }, function() {
-                    clearSessionState();
-                });
-            }
-        });
-    } else {
-        console.log("No active session to stop, clearing anyway");
-        // Force clear even if no session
-        chrome.storage.local.set({
-            currentSessionId: null,
-            focusSessionData: {},
-            isPaused: false
-        }, function() {
-            clearSessionState();
-        });
-    }
+                if (currentSession) {
+                    currentSession.endTime = endTime;
+                    currentSession.duration = duration > 0 ? duration : 0;
+                    currentSession.websites = { ...focusSessionDataMemory };
+                    chrome.storage.local.set({ 
+                        sessionHistory: history,
+                        currentSessionId: null,
+                        focusSessionData: {},
+                        isPaused: false
+                    }, function() {
+                        focusSessionDataMemory = {};
+                        clearSessionState();
+                    });
+                } else {
+                    console.warn("Session not found in history. Creating fallback session for:", currentSessionId);
+                    const fallbackSession = {
+                        id: currentSessionId,
+                        startTime: sessionStartTime || Date.now(),
+                        endTime: Date.now(),
+                        duration: (Date.now() - (sessionStartTime || Date.now())) - totalPausedTime,
+                        websites: { ...focusSessionDataMemory },
+                        goals: []
+                    };
+                    history.push(fallbackSession);
+                    chrome.storage.local.set({
+                        sessionHistory: history,
+                        currentSessionId: null,
+                        focusSessionData: {},
+                        isPaused: false
+                    }, function() {
+                        focusSessionDataMemory = {};
+                        clearSessionState();
+                    });
+                }
+            });
+        } else {
+            console.log("No active session to stop, clearing anyway");
+            // Force clear even if no session
+            chrome.storage.local.set({
+                currentSessionId: null,
+                focusSessionData: {},
+                isPaused: false
+            }, function() {
+                focusSessionDataMemory = {};
+                clearSessionState();
+            });
+        }
+    });
 }
 
 function clearSessionState() {
-    // Always clean up
+    // Always clean up you
     lastActiveTab = null;
     lastActivityTime = null;
     currentSessionId = null;
@@ -249,7 +256,7 @@ function handleTabUpdate(tabId, changeInfo, tab) {
     }
 }
 
-function recordTime() {
+function recordTime(callback) {
     if (lastActiveTab && lastActivityTime && currentSessionId && !isPaused) {
         const now = new Date().getTime();
         const timeSpent = now - lastActivityTime;
@@ -258,18 +265,21 @@ function recordTime() {
             const url = new URL(lastActiveTab.url);
             const hostname = url.hostname;
             
-            chrome.storage.local.get("focusSessionData", function (data) {
-                let sessionData = data.focusSessionData || {};
-                if (sessionData[hostname]) {
-                    sessionData[hostname] += timeSpent;
-                } else {
-                    sessionData[hostname] = timeSpent;
-                }
-                chrome.storage.local.set({ focusSessionData: sessionData });
+            if (focusSessionDataMemory[hostname]) {
+                focusSessionDataMemory[hostname] += timeSpent;
+            } else {
+                focusSessionDataMemory[hostname] = timeSpent;
+            }
+            
+            chrome.storage.local.set({ focusSessionData: focusSessionDataMemory }, function() {
+                lastActivityTime = now;
+                if (callback) callback();
             });
+            return;
         }
     }
     lastActivityTime = new Date().getTime();
+    if (callback) callback();
 }
 
 function generateSessionId() {

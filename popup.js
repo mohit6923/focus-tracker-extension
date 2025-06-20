@@ -7,7 +7,17 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log("Popup loaded at:", new Date().toISOString());
     
     // Set up event listeners
-    document.getElementById('quickStart').addEventListener('click', () => startFocusSession());
+    document.getElementById('quickStart').addEventListener('click', () => {
+        startFocusSession([], function() {
+            isFocusModeOn = true;
+            userInitiatedStop = false;
+            isPaused = false;
+            chrome.storage.local.set({ isPaused: false });
+            updateUI();
+            updateDailyStats();
+            updateTimer();
+        });
+    });
     document.getElementById('goalStart').addEventListener('click', showGoalScreen);
     document.getElementById('stopFocus').addEventListener('click', stopFocusSession);
     document.getElementById('pauseResume').addEventListener('click', togglePause);
@@ -199,16 +209,31 @@ function startGoalBasedSession() {
     });
 
     if (selectedGoals.length === 0) {
-        // Maybe show a small warning? For now, just start a regular session.
-        startFocusSession();
+        startFocusSession([], function() {
+            isFocusModeOn = true;
+            userInitiatedStop = false;
+            isPaused = false;
+            chrome.storage.local.set({ isPaused: false });
+            updateUI();
+            updateDailyStats();
+            updateTimer();
+        });
         return;
     }
 
     console.log("Starting goal-based session with goals:", selectedGoals);
-    startFocusSession(selectedGoals);
+    startFocusSession(selectedGoals, function() {
+        isFocusModeOn = true;
+        userInitiatedStop = false;
+        isPaused = false;
+        chrome.storage.local.set({ isPaused: false });
+        updateUI();
+        updateDailyStats();
+        updateTimer();
+    });
 }
 
-function startFocusSession(goals = []) {
+function startFocusSession(goals = [], callback) {
     console.log("Starting focus session with goals:", goals);
     console.log("Goals parameter type:", typeof goals);
     console.log("Goals parameter length:", goals ? goals.length : 'undefined');
