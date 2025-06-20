@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Focus Tracker Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { margin: 10px; padding: 10px; }
+        .status { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Focus Tracker Debug</h1>
+    
+    <div class="status" id="status">Loading...</div>
+    
+    <button onclick="forceStopSession()">Force Stop Session</button>
+    <button onclick="clearAllData()">Clear All Data</button>
+    <button onclick="startSession()">Start Session</button>
+    <button onclick="refreshStatus()">Refresh Status</button>
+    
+    <script>
+        function refreshStatus() {
+            chrome.storage.local.get(['currentSessionId', 'sessionHistory', 'focusSessionData'], function(data) {
+                const status = document.getElementById('status');
+                status.innerHTML = `
+                    <h3>Current Status:</h3>
+                    <p><strong>Current Session ID:</strong> ${data.currentSessionId || 'None'}</p>
+                    <p><strong>Session History Count:</strong> ${data.sessionHistory ? data.sessionHistory.length : 0}</p>
+                    <p><strong>Focus Session Data:</strong> ${JSON.stringify(data.focusSessionData || {})}</p>
+                    <p><strong>All Data:</strong></p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            });
+        }
+        
+        function forceStopSession() {
+            console.log("Force stopping session...");
+            chrome.storage.local.set({
+                currentSessionId: null,
+                focusSessionData: {}
+            }, function() {
+                console.log("Session force stopped");
+                refreshStatus();
+            });
+        }
+        
+        function clearAllData() {
+            console.log("Clearing all data...");
+            chrome.storage.local.clear(function() {
+                console.log("All data cleared");
+                refreshStatus();
+            });
+        }
+        
+        function startSession() {
+            console.log("Starting session...");
+            chrome.runtime.sendMessage({
+                toggleFocus: true,
+                isFocusModeOn: true
+            }, function(response) {
+                console.log("Start session response:", response);
+                refreshStatus();
+            });
+        }
+        
+        // Initial load
+        refreshStatus();
+    </script>
+</body>
+</html> 

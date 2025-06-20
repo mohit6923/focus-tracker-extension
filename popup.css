@@ -1,67 +1,142 @@
 body {
     width: 300px;
+    height: 280px;
     padding: 20px;
-    font-family: Arial, sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #ecf0f1;
+    box-sizing: border-box;
 }
 
 .container {
     text-align: center;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 h2 {
     margin: 0 0 20px 0;
     font-size: 1.5em;
     font-weight: 300;
+    flex-shrink: 0;
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .status-section {
     margin-bottom: 20px;
     padding: 15px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 12px;
     backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-#statusText {
+#status {
     font-size: 0.9em;
     margin-bottom: 10px;
     opacity: 0.9;
+    min-height: 1.2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
 }
 
 .timer {
     font-size: 1.8em;
     font-weight: bold;
     font-family: 'Courier New', monospace;
-    color: #fff;
+    color: #ffffff;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    min-height: 1.2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 2px;
 }
 
-button {
+.btn {
     width: 100%;
     padding: 12px;
     font-size: 1em;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-weight: 500;
+    font-weight: 600;
     margin-bottom: 15px;
+    color: white;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-button:hover {
+.btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
 }
 
-button:active {
+.btn:active:not(:disabled) {
     transform: translateY(0);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+}
+
+.btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #229954 0%, #27ae60 100%);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.text-success {
+    color: #2ecc71 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.text-danger {
+    color: #e74c3c !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .analytics-section {
     margin-top: 15px;
+    flex-shrink: 0;
 }
 
 #analyticsLink {

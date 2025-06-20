@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Analytics</title>
+</head>
+<body>
+    <h1>Test Analytics</h1>
+    <button onclick="createSampleData()">Create Sample Session Data</button>
+    <button onclick="viewAnalytics()">View Analytics</button>
+    <button onclick="clearData()">Clear All Data</button>
+    
+    <div id="status"></div>
+    
+    <script>
+        function createSampleData() {
+            const now = Date.now();
+            const oneHourAgo = now - (60 * 60 * 1000);
+            const twoHoursAgo = now - (2 * 60 * 60 * 1000);
+            
+            const sampleSessions = [
+                {
+                    id: 'session_1',
+                    startTime: twoHoursAgo,
+                    endTime: oneHourAgo,
+                    duration: 60 * 60 * 1000, // 1 hour
+                    websites: {
+                        'github.com': 30 * 60 * 1000, // 30 minutes
+                        'stackoverflow.com': 20 * 60 * 1000, // 20 minutes
+                        'google.com': 10 * 60 * 1000 // 10 minutes
+                    }
+                },
+                {
+                    id: 'session_2',
+                    startTime: oneHourAgo,
+                    endTime: now,
+                    duration: 60 * 60 * 1000, // 1 hour
+                    websites: {
+                        'youtube.com': 40 * 60 * 1000, // 40 minutes
+                        'reddit.com': 15 * 60 * 1000, // 15 minutes
+                        'twitter.com': 5 * 60 * 1000 // 5 minutes
+                    }
+                }
+            ];
+            
+            chrome.storage.local.set({
+                sessionHistory: sampleSessions,
+                focusSessionData: {}
+            }, function() {
+                document.getElementById('status').innerHTML = 'Sample data created! Check analytics.';
+            });
+        }
+        
+        function viewAnalytics() {
+            chrome.tabs.create({ url: 'analytics.html' });
+        }
+        
+        function clearData() {
+            chrome.storage.local.clear(function() {
+                document.getElementById('status').innerHTML = 'All data cleared!';
+            });
+        }
+        
+        // Show current data
+        chrome.storage.local.get(['sessionHistory', 'currentSessionId'], function(data) {
+            const status = document.getElementById('status');
+            status.innerHTML = `
+                <h3>Current Data:</h3>
+                <p>Sessions: ${data.sessionHistory ? data.sessionHistory.length : 0}</p>
+                <p>Current Session: ${data.currentSessionId || 'None'}</p>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+        });
+    </script>
+</body>
+</html> 

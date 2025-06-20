@@ -11,6 +11,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
     }
     
+    // Set up tab switching
+    setupTabSwitching();
+    
     chrome.storage.local.get(["sessionHistory", "focusSessionData"], function (data) {
         console.log("Retrieved data:", data);
         
@@ -30,6 +33,16 @@ document.addEventListener("DOMContentLoaded", function () {
         displayAnalytics(sessionHistory, currentSessionData);
     });
 });
+
+function setupTabSwitching() {
+    // Add event listeners to all tab buttons
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+            showTab(tabName);
+        });
+    });
+}
 
 function displayAnalytics(sessionHistory, currentSessionData) {
     // Calculate statistics
@@ -207,7 +220,7 @@ function createWebsitesChart(sessionHistory) {
     
     const ctx = document.getElementById("websitesChart").getContext("2d");
     new Chart(ctx, {
-        type: "horizontalBar",
+        type: "bar",
         data: {
             labels: labels,
             datasets: [{
@@ -260,7 +273,7 @@ function displaySessionsList(sessionHistory) {
         const topWebsites = websites.slice(0, 3).join(", ");
         
         return `
-            <div class="session-item" onclick="toggleSessionDetails(${index})">
+            <div class="session-item" data-session-index="${index}">
                 <div class="session-header">
                     <div class="session-time">${startTime.toLocaleString()}</div>
                     <div class="session-duration">${formatTime(duration)}</div>
@@ -290,6 +303,14 @@ function displaySessionsList(sessionHistory) {
             </div>
         `;
     }).join('');
+    
+    // Add event listeners to session items
+    document.querySelectorAll('.session-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const index = this.getAttribute('data-session-index');
+            toggleSessionDetails(index);
+        });
+    });
 }
 
 function toggleSessionDetails(index) {
@@ -312,7 +333,7 @@ function showTab(tabName) {
     document.getElementById(`${tabName}Tab`).classList.add('active');
     
     // Add active class to clicked tab
-    event.target.classList.add('active');
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
 }
 
 function formatTime(milliseconds, short = false) {
