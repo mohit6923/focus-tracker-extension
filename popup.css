@@ -324,3 +324,9 @@ h2 {
     margin-bottom: 20px;
     max-height: 180px;
 }
+
+.goal-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
