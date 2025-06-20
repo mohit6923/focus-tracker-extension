@@ -65,39 +65,60 @@ function displayWebsiteBreakdown(sessions) {
         return acc;
     }, {});
 
-    // Sort dates to show most recent first
     const dates = Object.keys(websitesByDay).sort((a, b) => new Date(b) - new Date(a));
     if (dates.length === 0) {
         container.innerHTML = "<div class='no-data'>No website data to display.</div>";
         return;
     }
 
-    // Create day selector
-    const daySelector = document.createElement('select');
-    daySelector.className = 'day-selector';
-    daySelector.innerHTML = dates.map(date => `<option value="${date}">${date}</option>`).join('');
-    container.appendChild(daySelector);
+    // Create horizontal day picker
+    const dayPicker = document.createElement('div');
+    dayPicker.className = 'day-picker';
+    dayPicker.innerHTML = dates.map(date => 
+        `<div class="day-chip" data-date="${date}">${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`
+    ).join('');
+    container.innerHTML = ''; // Clear previous content
+    container.appendChild(dayPicker);
 
     const breakdownContent = document.createElement('div');
     breakdownContent.className = 'website-breakdown';
     container.appendChild(breakdownContent);
-    
-    daySelector.addEventListener('change', () => renderDay(daySelector.value));
+
+    dayPicker.querySelectorAll('.day-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            dayPicker.querySelector('.active')?.classList.remove('active');
+            chip.classList.add('active');
+            renderDay(chip.getAttribute('data-date'));
+        });
+    });
 
     function renderDay(date) {
         const dayData = websitesByDay[date];
+        if (!dayData) {
+            breakdownContent.innerHTML = "<div class='no-data'>No website data for this day.</div>";
+            return;
+        }
         const categorized = categorizeWebsites(dayData);
+        
+        const maxTimePerSite = Math.max(...Object.values(dayData), 0);
 
         breakdownContent.innerHTML = Object.entries(categorized).map(([category, sites]) => {
             const sortedSites = Object.entries(sites).sort(([, a], [, b]) => b - a);
             return `
-                <div class="category-container">
-                    <h4 class="category-title">${category}</h4>
+                <div class="category-card">
+                    <div class="category-header">
+                        <h4 class="category-title">${category}</h4>
+                    </div>
                     <ul class="website-list">
                         ${sortedSites.map(([site, time]) => `
                             <li class="website-item">
-                                <span>${site}</span>
-                                <span>${formatTime(time)}</span>
+                                <div class="website-info">
+                                    <span class="website-name">${site}</span>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar" style="width: ${(time / maxTimePerSite) * 100}%"></div>
+                                    </div>
+                                </div>
+                                <span class="website-time">${formatTime(time)}</span>
                             </li>
                         `).join('')}
                     </ul>
@@ -108,7 +129,11 @@ function displayWebsiteBreakdown(sessions) {
 
     // Initial render for the most recent day
     if (dates.length > 0) {
-        renderDay(dates[0]);
+        const firstChip = dayPicker.querySelector('.day-chip');
+        if (firstChip) {
+            firstChip.classList.add('active');
+            renderDay(firstChip.getAttribute('data-date'));
+        }
     }
 }
 
@@ -320,14 +345,13 @@ function displaySessionsList(sessionHistory) {
         return `
             <div class="session-item">
                 <div class="session-header">
-                    <div class="session-time">${startTime.toLocaleString()}</div>
-                    <div class="session-duration">${formatTime(duration)}</div>
+                    <span class="session-time">${startTime.toLocaleString()}</span>
+                    <span class="session-duration">${formatTime(duration)}</span>
                 </div>
-                <div class="session-websites">
-                    ${websites.length > 0 ? `Visited: ${topWebsites}${websites.length > 3 ? '...' : ''}` : 'No websites tracked'}
+                <div class="session-summary">
+                    ${websites.length > 0 ? `Visited ${websites.length} sites: ${topWebsites}${websites.length > 3 ? '...' : ''}` : 'No websites tracked'}
                 </div>
                 <div class="session-details">
-                    <h4>Session Details</h4>
                     <p><strong>Start:</strong> ${startTime.toLocaleString()}</p>
                     ${endTime ? `<p><strong>End:</strong> ${endTime.toLocaleString()}</p>` : ''}
                     <p><strong>Duration:</strong> ${formatTime(duration)}</p>
