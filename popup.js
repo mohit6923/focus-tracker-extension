@@ -123,7 +123,7 @@ function startFocusSession() {
             console.log("Start response:", response);
             if (response && response.success) {
                 isFocusModeOn = true;
-                sessionStartTime = Date.now();
+                sessionStartTime = response.startTime;
                 userInitiatedStop = false;
                 isPaused = false;
                 chrome.storage.local.set({ isPaused: false });

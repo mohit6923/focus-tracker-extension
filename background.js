@@ -39,8 +39,8 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         try {
             if (request.toggleFocus && request.isFocusModeOn) {
                 console.log("Starting focus session...");
-                startFocusSession();
-                sendResponse({success: true, action: "started"});
+                const session = startFocusSession();
+                sendResponse({success: true, action: "started", startTime: session.startTime});
             } else if (request.toggleFocus && !request.isFocusModeOn) {
                 console.log("Stopping focus session...");
                 stopFocusSession();
@@ -125,6 +125,8 @@ function startFocusSession() {
         
         chrome.tabs.onActivated.addListener(handleTabActivation);
         chrome.tabs.onUpdated.addListener(handleTabUpdate);
+        
+        return sessionData;
         
     } catch (error) {
         console.error("Error in startFocusSession:", error);
@@ -231,14 +233,14 @@ function clearSessionState() {
 function handleTabActivation(activeInfo) {
     recordTime();
     chrome.tabs.get(activeInfo.tabId, function (tab) {
-        if(tab) {
+        if(tab && tab.status === 'complete') {
             lastActiveTab = tab;
         }
     });
 }
 
 function handleTabUpdate(tabId, changeInfo, tab) {
-    if (tab.active && changeInfo.url) {
+    if (tab.active && (changeInfo.url || changeInfo.status === 'complete')) {
         recordTime();
         lastActiveTab = tab;
     }
